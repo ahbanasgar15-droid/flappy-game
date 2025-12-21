@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flappy Bird – Stable Version</title>
+  <title>Flappy Bird – Tap Sound Version</title>
+
   <style>
     body {
       margin: 0;
@@ -21,191 +22,221 @@
   </style>
 </head>
 <body>
-  <canvas id="game" width="360" height="520"></canvas>
 
-  <script>
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
+<canvas id="game" width="360" height="520"></canvas>
 
-    /* Images */
-    const birdImg = new Image();
-    birdImg.src = 'bird.png';
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-    const pipeImg = new Image();
-    pipeImg.src = 'pipe.png';
+/* IMAGES */
+const birdImg = new Image();
+birdImg.src = "bird.png";
 
-    const bgImg = new Image();
-    bgImg.src = 'background.png'; // optional
+const pipeImg = new Image();
+pipeImg.src = "pipe.png";
 
-    /* Audio */
-    const loseSound = new Audio('lose.mp3');
-    const bgMusic = new Audio('subway.mp3');
-    bgMusic.loop = true;
-    bgMusic.volume = 0.25;
+const bgImg = new Image();
+bgImg.src = "background.png";
 
-    let musicStarted = false;
+/* AUDIO (NO LAG SETUP) */
+const tapSound = new Audio("tap.mp3");
+tapSound.preload = "auto";
+tapSound.volume = 0.6;
 
-    /* Game State */
-    let gameStarted = false;
-    let gameOver = false;
+const loseSound = new Audio("lose.mp3");
+loseSound.preload = "auto";
 
-    /* Screen shake */
-    let shakeTime = 0;
-    const shakeIntensity = 6;
+/* GAME STATE */
+let gameStarted = false;
+let gameOver = false;
 
-    /* Bird (slower + easier) */
-    const bird = {
-      x: 60,
-      y: 200,
-      width: 40,
-      height: 40,
-      gravity: 0.28,
-      lift: -6,
-      velocity: 0
-    };
+/* SCREEN SHAKE */
+let shakeTime = 0;
+const shakeIntensity = 6;
 
-    /* Pipes (slower + wider gap) */
-    const pipes = [];
-    const pipeWidth = 60;
-    const gap = 190;
-    let frame = 0;
-    let score = 0;
+/* BIRD */
+const bird = {
+  x: 60,
+  y: 200,
+  width: 40,
+  height: 40,
+  gravity: 0.28,
+  lift: -6,
+  velocity: 0
+};
 
-    function resetGame() {
-      pipes.length = 0;
-      bird.y = 200;
-      bird.velocity = 0;
-      frame = 0;
-      score = 0;
-      gameOver = false;
-      gameStarted = false;
+/* PIPES */
+const pipes = [];
+const pipeWidth = 60;
+const gap = 190;
+let frame = 0;
+let score = 0;
+
+function resetGame() {
+  pipes.length = 0;
+  bird.y = 200;
+  bird.velocity = 0;
+  frame = 0;
+  score = 0;
+  gameOver = false;
+  gameStarted = false;
+}
+
+function playTapSound() {
+  tapSound.currentTime = 0; // NO DELAY
+  tapSound.play();
+}
+
+function triggerLose() {
+  if (gameOver) return;
+  gameOver = true;
+  shakeTime = 20;
+  loseSound.currentTime = 0;
+  loseSound.play();
+}
+
+function drawBackground() {
+  if (bgImg.complete && bgImg.naturalWidth) {
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = "#70c5ce";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function drawBird() {
+  ctx.drawImage(birdImg, bird.x, bird.y, bird.width, bird.height);
+}
+
+function updateBird() {
+  bird.velocity += bird.gravity;
+  bird.y += bird.velocity;
+
+  if (bird.y < 0 || bird.y + bird.height > canvas.height) {
+    triggerLose();
+  }
+}
+
+function drawPipes() {
+  pipes.forEach(p => {
+    ctx.save();
+    ctx.translate(p.x + pipeWidth, p.top);
+    ctx.scale(-1, -1);
+    ctx.drawImage(pipeImg, 0, 0, pipeWidth, p.top);
+    ctx.restore();
+
+    ctx.drawImage(
+      pipeImg,
+      p.x,
+      canvas.height - p.bottom,
+      pipeWidth,
+      p.bottom
+    );
+  });
+}
+
+function updatePipes() {
+  if (frame % 120 === 0) {
+    const top = Math.random() * 180 + 50;
+    const bottom = canvas.height - top - gap;
+    pipes.push({ x: canvas.width, top, bottom, passed: false });
+  }
+
+  pipes.forEach(p => {
+    p.x -= 1.2;
+
+    if (
+      bird.x < p.x + pipeWidth &&
+      bird.x + bird.width > p.x &&
+      (bird.y < p.top ||
+        bird.y + bird.height > canvas.height - p.bottom)
+    ) {
+      triggerLose();
     }
 
-    function triggerLose() {
-      if (gameOver) return;
-      gameOver = true;
-      shakeTime = 20;
-      loseSound.currentTime = 0;
-      loseSound.play();
+    if (!p.passed && p.x + pipeWidth < bird.x) {
+      score++;
+      p.passed = true;
     }
+  });
 
-    function drawBackground() {
-      if (bgImg.complete && bgImg.naturalWidth !== 0) {
-        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-      } else {
-        ctx.fillStyle = '#70c5ce';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-    }
+  if (pipes.length && pipes[0].x + pipeWidth < 0) {
+    pipes.shift();
+  }
+}
 
-    function drawBird() {
-      ctx.drawImage(birdImg, bird.x, bird.y, bird.width, bird.height);
-    }
+function drawText() {
+  ctx.fillStyle = "#000";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, 15, 30);
 
-    function updateBird() {
-      bird.velocity += bird.gravity;
-      bird.y += bird.velocity;
-      if (bird.y + bird.height > canvas.height || bird.y < 0) triggerLose();
-    }
+  if (!gameStarted) {
+    ctx.font = "26px Arial";
+    ctx.fillText("CLICK TO START", 80, 240);
+  } else if (gameOver) {
+    ctx.font = "34px Arial";
+    ctx.fillText("FOCUSS!", 105, 240);
+    ctx.font = "16px Arial";
+    ctx.fillText("Click to Restart", 115, 270);
+  }
+}
 
-    function drawPipes() {
-      pipes.forEach(p => {
-        ctx.save();
-        ctx.translate(p.x + pipeWidth, p.top);
-        ctx.scale(-1, -1);
-        ctx.drawImage(pipeImg, 0, 0, pipeWidth, p.top);
-        ctx.restore();
-        ctx.drawImage(pipeImg, p.x, canvas.height - p.bottom, pipeWidth, p.bottom);
-      });
-    }
+function gameLoop() {
+  if (shakeTime > 0) {
+    const dx = (Math.random() - 0.5) * shakeIntensity;
+    const dy = (Math.random() - 0.5) * shakeIntensity;
+    ctx.setTransform(1, 0, 0, 1, dx, dy);
+    shakeTime--;
+  } else {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
 
-    function updatePipes() {
-      if (frame % 120 === 0) {
-        const top = Math.random() * 180 + 50;
-        const bottom = canvas.height - top - gap;
-        pipes.push({ x: canvas.width, top, bottom, passed: false });
-      }
+  drawBackground();
+  drawBird();
+  drawPipes();
+  drawText();
 
-      pipes.forEach(p => {
-        p.x -= 1.2;
-        if (
-          bird.x < p.x + pipeWidth &&
-          bird.x + bird.width > p.x &&
-          (bird.y < p.top || bird.y + bird.height > canvas.height - p.bottom)
-        ) triggerLose();
-        if (!p.passed && p.x + pipeWidth < bird.x) {
-          score++;
-          p.passed = true;
-        }
-      });
+  if (gameStarted && !gameOver) {
+    updateBird();
+    updatePipes();
+    frame++;
+  }
 
-      if (pipes.length && pipes[0].x + pipeWidth < 0) pipes.shift();
-    }
+  requestAnimationFrame(gameLoop);
+}
 
-    function drawText() {
-      ctx.fillStyle = '#000';
-      ctx.font = '20px Arial';
-      ctx.fillText('Score: ' + score, 15, 30);
+/* INPUT */
+document.addEventListener("click", handleTap);
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") handleTap();
+});
 
-      if (!gameStarted) {
-        ctx.font = '26px Arial';
-        ctx.fillText('CLICK TO START', 85, 240);
-      } else if (gameOver) {
-        ctx.font = '32px Arial';
-        ctx.fillText('FOCUSS!', 115, 240);
-        ctx.font = '16px Arial';
-        ctx.fillText('Click to Restart', 120, 270);
-      }
-    }
+function handleTap() {
+  playTapSound();
 
-    function gameLoop() {
-      if (shakeTime > 0) {
-        const dx = (Math.random() - 0.5) * shakeIntensity;
-        const dy = (Math.random() - 0.5) * shakeIntensity;
-        ctx.setTransform(1, 0, 0, 1, dx, dy);
-        shakeTime--;
-      } else {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-      }
+  if (!gameStarted) {
+    gameStarted = true;
+    return;
+  }
 
-      drawBackground();
-      drawBird();
-      drawPipes();
-      drawText();
+  if (!gameOver) {
+    bird.velocity = bird.lift;
+  } else {
+    resetGame();
+  }
+}
 
-      if (gameStarted && !gameOver) {
-        updateBird();
-        updatePipes();
-        frame++;
-      }
+/* START */
+let loaded = 0;
+function start() {
+  loaded++;
+  if (loaded === 2) gameLoop();
+}
 
-      requestAnimationFrame(gameLoop);
-    }
+birdImg.onload = start;
+pipeImg.onload = start;
+</script>
 
-    document.addEventListener('click', () => {
-      if (!musicStarted) {
-        bgMusic.play();
-        musicStarted = true;
-      }
-      if (!gameStarted) {
-        gameStarted = true;
-        return;
-      }
-      if (!gameOver) {
-        bird.velocity = bird.lift;
-      } else {
-        resetGame();
-      }
-    });
-
-    let loaded = 0;
-    function start() {
-      loaded++;
-      if (loaded === 2) gameLoop();
-    }
-
-    birdImg.onload = start;
-    pipeImg.onload = start;
-  </script>
 </body>
 </html>
